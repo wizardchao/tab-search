@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Tab Search - Settings</title>
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --bg: #f9fafb;
+      --card-bg: #ffffff;
+      --text: #1f2937;
+      --text-secondary: #6b7280;
+      --border: #e5e7eb;
+      --success: #16a34a;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111827;
+        --card-bg: #1f2937;
+        --text: #f3f4f6;
+        --text-secondary: #9ca3af;
+        --border: #374151;
+      }
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 32px;
+      min-width: 420px;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    .subtitle { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 28px; }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .field { margin-bottom: 20px; }
+    .field:last-child { margin-bottom: 0; }
+    label {
+      display: block;
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin-bottom: 6px;
+    }
+    .hint {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+    select, input[type="number"] {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+    }
+    select:focus, input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
+    }
+    kbd {
+      display: inline-block;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      min-width: 32px;
+      text-align: center;
+    }
+    .btn {
+      display: inline-block;
+      padding: 8px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary { background: var(--border); color: var(--text); margin-left: 8px; }
+    .actions { margin-top: 24px; display: flex; align-items: center; }
+    .toast {
+      display: inline-block;
+      margin-left: 16px;
+      color: var(--success);
+      font-size: 0.85rem;
+      font-weight: 600;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .toast.show { opacity: 1; }
+    .preview {
+      margin-top: 16px;
+      padding: 14px 18px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+    .preview-label { color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 6px; }
+    .key-display { display: flex; align-items: center; gap: 6px; font-size: 0.95rem; }
+    .hidden { display: none; }
+    .mode-option {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px;
+      margin-bottom: 8px; cursor: pointer; transition: border-color 0.15s;
+    }
+    .mode-option:hover { border-color: var(--primary); }
+    .mode-option.active { border-color: var(--primary); background: rgba(79,70,229,0.05); }
+    .mode-option input[type="radio"] { accent-color: var(--primary); }
+    .mode-desc { font-size: 0.85rem; color: var(--text-secondary); }
+  </style>
+</head>
+<body>
+  <h1>Tab Search Settings</h1>
+  <p class="subtitle">Customize the shortcut to open Tab Search overlay</p>
+
+  <div class="card">
+    <div class="field">
+      <label>Shortcut Mode</label>
+      <div class="mode-option active" data-mode="doubleTapModifier" id="mode-dtm">
+        <input type="radio" name="mode" value="doubleTapModifier" checked>
+        <div>
+          <div>Double-tap modifier key</div>
+          <div class="mode-desc">Quick double-press a modifier key (recommended)</div>
+        </div>
+      </div>
+      <div class="mode-option" data-mode="modifierPlusTrigger" id="mode-mpt">
+        <input type="radio" name="mode" value="modifierPlusTrigger">
+        <div>
+          <div>Modifier + double-tap trigger key</div>
+          <div class="mode-desc">Hold a modifier and double-press another key</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="modifier">Modifier Key</label>
+      <select id="modifier">
+        <option value="Alt">Option / Alt</option>
+        <option value="Meta">Command / Win</option>
+        <option value="Control">Control</option>
+        <option value="Shift">Shift</option>
+      </select>
+    </div>
+
+    <div class="field hidden" id="trigger-field">
+      <label for="triggerKey">Trigger Key (double-tap)</label>
+      <p class="hint">The key to press twice while holding modifier</p>
+      <select id="triggerKey">
+        <option value="Space">Space</option>
+        <option value="KeyJ">J</option>
+        <option value="KeyK">K</option>
+        <option value="KeyS">S</option>
+        <option value="Slash">/ (Slash)</option>
+        <option value="Period">. (Period)</option>
+        <option value="Backquote">` (Backtick)</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="interval">Double-tap Interval (ms)</label>
+      <p class="hint">Maximum time between two key presses, 200~800ms</p>
+      <input type="number" id="interval" min="200" max="800" step="50" value="400">
+    </div>
+
+    <div class="preview">
+      <div class="preview-label">Current shortcut</div>
+      <div class="key-display" id="preview"></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-primary" id="save">Save</button>
+    <button class="btn btn-secondary" id="reset">Reset to Default</button>
+    <span class="toast" id="toast">Saved!</span>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
