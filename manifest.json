@@ -3,7 +3,7 @@
   "name": "Tab Search",
   "version": "1.0.0",
   "description": "Quickly search and switch between open tabs",
-  "permissions": ["tabs", "storage"],
+  "permissions": ["tabs", "storage", "sessions"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

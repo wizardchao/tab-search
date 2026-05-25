@@ -1,4 +1,6 @@
 const STORAGE_KEY = 'tab_last_activated';
+const DISMISSED_KEY = 'tab_dismissed_closed';
+const MAX_CLOSED = 5;
 const SIMILARITY_WEIGHT = 0.7;
 const RECENCY_WEIGHT = 0.3;
 const DEBOUNCE_MS = 150;
@@ -6,6 +8,7 @@ const IS_OVERLAY = new URLSearchParams(location.search).has('overlay');
 
 let allTabs = [];
 let activationTimes = {};
+let dismissedClosed = new Set();
 let selectedIndex = 0;
 let filteredTabs = [];
 let debounceTimer = null;
@@ -17,25 +20,43 @@ const emptyState = document.getElementById('empty-state');
 const clearBtn = document.getElementById('clear-btn');
 const closeBtn = document.getElementById('close-btn');
 
-function deduplicateTabs(tabs) {
-  const urlMap = new Map();
-  tabs.forEach(tab => {
-    const existing = urlMap.get(tab.url);
-    if (!existing || (activationTimes[tab.id] || 0) > (activationTimes[existing.id] || 0)) {
-      urlMap.set(tab.url, tab);
-    }
-  });
-  return [...urlMap.values()].sort((a, b) => (activationTimes[b.id] || 0) - (activationTimes[a.id] || 0));
+async function fetchClosedTabs() {
+  const sessions = await chrome.sessions.getRecentlyClosed({ maxResults: 25 });
+  return sessions
+    .filter(s => s.tab && s.tab.url && !s.tab.url.startsWith('chrome://') && !dismissedClosed.has(s.tab.sessionId))
+    .map(s => ({
+      id: `closed_${s.tab.sessionId}`,
+      windowId: s.tab.windowId || 0,
+      title: s.tab.title || '',
+      url: s.tab.url,
+      favIconUrl: s.tab.favIconUrl || '',
+      closed: true,
+      sessionId: s.tab.sessionId,
+      lastModified: (s.lastModified || 0) * 1000,
+    }));
+}
+
+function deduplicateTabs(openTabs, closedTabs) {
+  const openUrls = new Set(openTabs.map(t => t.url));
+  const filteredClosed = closedTabs
+    .filter(t => !openUrls.has(t.url))
+    .sort((a, b) => b.lastModified - a.lastModified)
+    .slice(0, MAX_CLOSED);
+  const sortedOpen = [...openTabs].sort((a, b) => (activationTimes[b.id] || 0) - (activationTimes[a.id] || 0));
+  return [...sortedOpen, ...filteredClosed];
 }
 
 async function init() {
-  const [tabs, stored] = await Promise.all([
+  const [tabs, stored, dismissed] = await Promise.all([
     chrome.tabs.query({}),
     chrome.storage.local.get(STORAGE_KEY),
+    chrome.storage.local.get(DISMISSED_KEY),
   ]);
   activationTimes = stored[STORAGE_KEY] || {};
-  allTabs = deduplicateTabs(tabs);
-  tabCount.textContent = `${allTabs.length} tabs`;
+  dismissedClosed = new Set(dismissed[DISMISSED_KEY] || []);
+  const closedTabs = await fetchClosedTabs();
+  allTabs = deduplicateTabs(tabs, closedTabs);
+  tabCount.textContent = `${tabs.length} tabs`;
   renderTabs(allTabs);
 }
 
@@ -81,15 +102,15 @@ function computeSimilarity(query, text) {
 }
 
 function scoreTab(tab, query) {
+  const recency = tab.closed ? (tab.lastModified || 0) : (activationTimes[tab.id] || 0);
+  const openBoost = tab.closed ? 0 : 1e15; // Open tabs always rank above closed
   if (!query) {
-    // No query: sort purely by recency
-    return getRecencyScore(tab.id);
+    return openBoost + recency;
   }
   const titleScore = computeSimilarity(query, tab.title);
-  const urlScore = computeSimilarity(query, tab.url) * 0.8; // Title matches matter more
+  const urlScore = computeSimilarity(query, tab.url) * 0.8;
   const similarity = Math.max(titleScore, urlScore);
-  const recency = getRecencyScore(tab.id);
-  return SIMILARITY_WEIGHT * similarity + RECENCY_WEIGHT * recency;
+  return openBoost + SIMILARITY_WEIGHT * similarity + RECENCY_WEIGHT * recency;
 }
 
 function getRecencyScore(tabId) {
@@ -149,20 +170,32 @@ function renderTabs(tabs) {
   const query = searchInput.value.trim();
   const fragment = document.createDocumentFragment();
 
-  // Track window IDs for multi-window badge
-  const windowIds = new Set(allTabs.map(t => t.windowId));
+  // Track window IDs for multi-window badge (open tabs only)
+  const windowIds = new Set(allTabs.filter(t => !t.closed).map(t => t.windowId));
   const showWindowBadge = windowIds.size > 1;
 
   tabs.forEach((tab, i) => {
     const li = document.createElement('li');
-    li.className = 'tab-item' + (i === 0 ? ' selected' : '');
+    li.className = 'tab-item' + (i === 0 ? ' selected' : '') + (tab.closed ? ' tab-closed' : '');
     li.dataset.index = i;
 
     const favicon = tab.favIconUrl && tab.favIconUrl.startsWith('http')
       ? `<img class="tab-favicon" src="${escapeHtml(tab.favIconUrl)}" alt="">`
       : `<svg class="tab-favicon" viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="2" fill="#e5e7eb"/><text x="8" y="12" text-anchor="middle" font-size="10" fill="#6b7280">T</text></svg>`;
 
-    const windowBadge = showWindowBadge
+    const closedBadge = tab.closed
+      ? `<span class="tab-closed-badge">Closed</span>`
+      : '';
+
+    const deleteBtn = tab.closed
+      ? `<button type="button" class="tab-delete-btn" title="Remove from list">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>`
+      : '';
+
+    const windowBadge = showWindowBadge && !tab.closed
       ? `<span class="tab-window-badge">W${Array.from(windowIds).indexOf(tab.windowId) + 1}</span>`
       : '';
 
@@ -172,10 +205,17 @@ function renderTabs(tabs) {
         <div class="tab-title">${highlightMatch(tab.title || 'Untitled', query)}</div>
         <div class="tab-url">${highlightMatch(tab.url || '', query)}</div>
       </div>
-      ${windowBadge}
+      ${closedBadge}${windowBadge}${deleteBtn}
     `;
 
-    li.addEventListener('click', () => switchToTab(tab));
+    li.addEventListener('click', (e) => {
+      if (e.target.closest('.tab-delete-btn')) {
+        e.stopPropagation();
+        dismissClosedTab(tab);
+        return;
+      }
+      switchToTab(tab);
+    });
     li.addEventListener('mouseenter', () => {
       selectedIndex = i;
       updateSelection();
@@ -207,9 +247,20 @@ function closePopup() {
   }
 }
 
+async function dismissClosedTab(tab) {
+  dismissedClosed.add(tab.sessionId);
+  await chrome.storage.local.set({ [DISMISSED_KEY]: [...dismissedClosed] });
+  allTabs = allTabs.filter(t => t !== tab);
+  performSearch();
+}
+
 async function switchToTab(tab) {
-  await chrome.tabs.update(tab.id, { active: true });
-  await chrome.windows.update(tab.windowId, { focused: true });
+  if (tab.closed) {
+    await chrome.sessions.restore(tab.sessionId);
+  } else {
+    await chrome.tabs.update(tab.id, { active: true });
+    await chrome.windows.update(tab.windowId, { focused: true });
+  }
   closePopup();
 }
 

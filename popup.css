@@ -173,6 +173,52 @@ body {
   font-weight: 700;
 }
 
+.tab-closed {
+  opacity: 0.55;
+}
+
+.tab-closed:hover,
+.tab-closed.selected {
+  opacity: 0.8;
+}
+
+.tab-closed-badge {
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+
+.tab-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+
+.tab-item:hover .tab-delete-btn,
+.tab-item.selected .tab-delete-btn {
+  opacity: 1;
+}
+
+.tab-delete-btn:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
 .tab-window-badge {
   font-size: 10px;
   color: var(--text-secondary);
