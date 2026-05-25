@@ -42,6 +42,9 @@ body {
 }
 
 .search-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 10px 12px 8px;
   border-bottom: 1px solid var(--border);
 }
@@ -50,6 +53,8 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+  min-width: 0;
   background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -78,6 +83,26 @@ body {
 
 #search-input::placeholder {
   color: var(--text-secondary);
+}
+
+.clear-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: var(--border);
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.clear-btn:hover {
+  background: var(--text-secondary);
+  color: var(--bg);
 }
 
 .tab-count {
@@ -156,6 +181,27 @@ body {
   border-radius: 4px;
   padding: 1px 5px;
   flex-shrink: 0;
+}
+
+.close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: var(--input-bg);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  padding: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.close-btn:hover {
+  background: var(--border);
+  color: var(--text);
 }
 
 .empty-state {

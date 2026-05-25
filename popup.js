@@ -14,14 +14,27 @@ const searchInput = document.getElementById('search-input');
 const tabList = document.getElementById('tab-list');
 const tabCount = document.getElementById('tab-count');
 const emptyState = document.getElementById('empty-state');
+const clearBtn = document.getElementById('clear-btn');
+const closeBtn = document.getElementById('close-btn');
+
+function deduplicateTabs(tabs) {
+  const urlMap = new Map();
+  tabs.forEach(tab => {
+    const existing = urlMap.get(tab.url);
+    if (!existing || (activationTimes[tab.id] || 0) > (activationTimes[existing.id] || 0)) {
+      urlMap.set(tab.url, tab);
+    }
+  });
+  return [...urlMap.values()].sort((a, b) => (activationTimes[b.id] || 0) - (activationTimes[a.id] || 0));
+}
 
 async function init() {
   const [tabs, stored] = await Promise.all([
     chrome.tabs.query({}),
     chrome.storage.local.get(STORAGE_KEY),
   ]);
-  allTabs = tabs;
   activationTimes = stored[STORAGE_KEY] || {};
+  allTabs = deduplicateTabs(tabs);
   tabCount.textContent = `${allTabs.length} tabs`;
   renderTabs(allTabs);
 }
@@ -224,8 +237,20 @@ function performSearch() {
 // --- Event listeners ---
 
 searchInput.addEventListener('input', () => {
+  clearBtn.style.display = searchInput.value ? 'flex' : 'none';
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(performSearch, DEBOUNCE_MS);
+});
+
+clearBtn.addEventListener('click', () => {
+  searchInput.value = '';
+  clearBtn.style.display = 'none';
+  searchInput.focus();
+  performSearch();
+});
+
+closeBtn.addEventListener('click', () => {
+  closePopup();
 });
 
 document.addEventListener('keydown', (e) => {
