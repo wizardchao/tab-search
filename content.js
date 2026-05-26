@@ -116,16 +116,25 @@
       .backdrop {
         position: fixed; top: 0; left: 0;
         width: 100vw; height: 100vh;
-        background: rgba(0, 0, 0, 0.4);
+        background: rgba(0, 0, 0, 0.5);
         z-index: 2147483647;
-        display: flex; justify-content: center; align-items: flex-start;
-        padding-top: 15vh;
+        display: flex; justify-content: center; align-items: center;
+        animation: fadeIn 0.2s ease both;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+      }
+      @keyframes scaleIn {
+        from { transform: scale(0.88); opacity: 0; }
+        to   { transform: scale(1);    opacity: 1; }
       }
       iframe {
-        width: 460px; height: 520px;
+        width: 820px; height: 540px;
         border: none; border-radius: 12px;
-        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3);
-        background: #fff;
+        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
+        background: #000;
+        animation: scaleIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
       }
     `;
 
@@ -163,6 +172,20 @@
 
   window.addEventListener('message', (e) => {
     if (e.data === 'tab-search-close') removeOverlay();
+  });
+
+  // Memory reporting for popup
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.action === 'getMemory') {
+      try {
+        const mem = performance.memory || {};
+        const used = mem.usedJSHeapSize || 0;
+        sendResponse({ usedJSHeapSize: used });
+      } catch {
+        sendResponse({ usedJSHeapSize: 0 });
+      }
+      return true; // async response
+    }
   });
 
   document.addEventListener('keydown', (e) => {

@@ -85,10 +85,9 @@ function scoreTab(tab, query) {
   if (!query) {
     return recency;
   }
-  const titleScore = computeSimilarity(query, tab.title);
-  const urlScore = computeSimilarity(query, tab.url) * 0.8;
-  const similarity = Math.max(titleScore, urlScore);
-  return SIMILARITY_WEIGHT * similarity + RECENCY_WEIGHT * recency;
+  const urlScore = computeSimilarity(query, tab.url);
+  if (urlScore === 0) return 0;
+  return SIMILARITY_WEIGHT * urlScore + RECENCY_WEIGHT * recency;
 }
 
 function getRecencyScore(tabId) {
@@ -132,11 +131,75 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// --- Rendering ---
+// --- Memory info ---
 
-function renderTabs(tabs) {
+async function fetchTabMemory(tabs) {
+  // Strategy 1: query content scripts for performance.memory
+  const memMap = {};
+  await Promise.all(tabs.map(async (tab) => {
+    try {
+      const resp = await new Promise((resolve) => {
+        chrome.tabs.sendMessage(tab.id, { action: 'getMemory' }, (r) => {
+          resolve(chrome.runtime.lastError ? null : r);
+        });
+        setTimeout(() => resolve(null), 300);
+      });
+      if (resp && resp.usedJSHeapSize > 0) {
+        memMap[tab.id] = resp.usedJSHeapSize;
+      }
+    } catch { /* skip */ }
+  }));
+
+  // Strategy 2: fallback to chrome.processes for tabs without content script data
+  try {
+    if (chrome.processes) {
+      const pidMap = new Map();
+      await Promise.all(tabs.map(async (tab) => {
+        if (memMap[tab.id]) return;
+        try {
+          const pid = await new Promise((resolve) => {
+            chrome.processes.getProcessIdForTab(tab.id, resolve);
+          });
+          if (pid && pid > 0) pidMap.set(tab.id, pid);
+        } catch { /* skip */ }
+      }));
+
+      if (pidMap.size > 0) {
+        const pidSet = new Set(pidMap.values());
+        const procs = await new Promise((resolve) => {
+          chrome.processes.getProcessInfo([...pidSet], true, resolve);
+        });
+        for (const [tabId, pid] of pidMap) {
+          const proc = procs[pid];
+          if (proc) {
+            memMap[tabId] = proc.privateMemory || proc.jsMemoryAllocated || 0;
+          }
+        }
+      }
+    }
+  } catch { /* skip */ }
+
+  return memMap;
+}
+
+function formatMemory(bytes) {
+  if (!bytes || bytes === 0) return '';
+  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)}GB`;
+  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(0)}MB`;
+  if (bytes >= 1e3) return `${(bytes / 1e3).toFixed(0)}KB`;
+  return `${bytes}B`;
+}
+
+async function renderTabs(tabs) {
   filteredTabs = tabs;
   selectedIndex = 0;
+
+  const query = searchInput.value.trim();
+  if (query) {
+    tabCount.textContent = `${tabs.length} / ${allTabs.length} tabs`;
+  } else {
+    tabCount.textContent = `${allTabs.length} tabs`;
+  }
 
   if (tabs.length === 0) {
     tabList.innerHTML = '';
@@ -145,7 +208,9 @@ function renderTabs(tabs) {
   }
   emptyState.style.display = 'none';
 
-  const query = searchInput.value.trim();
+  // Fetch memory info
+  const memMap = await fetchTabMemory(tabs);
+
   const fragment = document.createDocumentFragment();
 
   // Track window IDs for multi-window badge
@@ -165,16 +230,23 @@ function renderTabs(tabs) {
       ? `<span class="tab-window-badge">W${Array.from(windowIds).indexOf(tab.windowId) + 1}</span>`
       : '';
 
+    const mem = formatMemory(memMap[tab.id] || 0);
+
     li.innerHTML = `
       ${favicon}
       <div class="tab-info">
         <div class="tab-title">${highlightMatch(tab.title || 'Untitled', query)}</div>
         <div class="tab-url">${highlightMatch(tab.url || '', query)}</div>
       </div>
+      ${mem ? `<span class="tab-mem-badge">${mem}</span>` : ''}
       ${windowBadge}
     `;
 
-    li.addEventListener('click', () => switchToTab(tab));
+    li.addEventListener('click', (e) => {
+      const el = e.currentTarget;
+      el.classList.add('tab-click-active');
+      setTimeout(() => switchToTab(tab), 200);
+    });
     li.addEventListener('mouseenter', () => {
       selectedIndex = i;
       updateSelection();
